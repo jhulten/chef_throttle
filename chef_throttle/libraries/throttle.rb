@@ -3,7 +3,7 @@ require 'chef/log'
 require 'chef/event_dispatch/base'
 
 module ChefThrottle
-  class Log 
+  class Log
     def initialize(name)
       @name = name
     end
@@ -67,7 +67,7 @@ module ChefThrottle
         log.info{ "Waiting on Cluster lock..." }
         shared_latch.wait(run_on_failed_latch?)
         log.info{ "Got Cluster lock..." }
-      else 
+      else
         log.info{ "Chef throttle not enabled." }
       end
     end
@@ -87,28 +87,29 @@ module ChefThrottle
     end
 
     def run_on_failed_latch?
-      @run_on_failed_latch ||= (node.attribute?(:chef_throttle) && node[:chef_throttle][:run_on_failure] == true)
+      @run_on_failed_latch ||= node[:chef_throttle][:run_on_failure] == true
     end
 
     def shared_latch
-      @shared_latch ||= begin 
-                          begin
-                            server       = node[:chef_throttle][:server] || zk_connect_str(discover_zookeepers(node[:chef_throttle][:exhibitor] || "" ))
-                          rescue ExhibitorError => e
-                            log.warn { "Could not discover ZK connect string from Exhibitor: #{e.reason}" }
-                            log.warn { "Define either node[:chef_throttle][:server] (for static config) or node[:chef_throttle][:exhibitor] (for exhibitor discovery)" }
-                            if run_on_failed_latch?
-                              log.warn { "Continuing WITHOUT throttle..." }
-                            else
-                              log.fatal { "CANCELLING RUN: Throttle mechanism not available." } 
-                              raise e
-                            end
-                          end
-                          cluster_name = node[:chef_throttle][:cluster_name] || "default_cluster"
-                          limit        = node[:chef_throttle][:limit] || 1
-                          host         = node.name
-                          ZookeeperLatch.new(server, cluster_name, limit, host)
-                        end
+      @shared_latch ||= begin
+        cluster_name = node[:chef_throttle][:cluster_name] || "default_cluster"
+        limit        = node[:chef_throttle][:limit] || 1
+        host         = node.name
+        ZookeeperLatch.new(server, cluster_name, limit, host)
+      end
+    end
+
+    def server
+      node[:chef_throttle][:server] || zk_connect_str(discover_zookeepers(node[:chef_throttle][:exhibitor] || "" ))
+    rescue ExhibitorError => e
+      log.warn { "Could not discover ZK connect string from Exhibitor: #{e.reason}" }
+      log.warn { "Define either node[:chef_throttle][:server] (for static config) or node[:chef_throttle][:exhibitor] (for exhibitor discovery)" }
+      if run_on_failed_latch?
+        log.warn { "Continuing WITHOUT throttle..." }
+      else
+        log.fatal { "CANCELLING RUN: Throttle mechanism not available." }
+        raise e
+      end
     end
 
     def log

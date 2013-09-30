@@ -1,0 +1,52 @@
+{
+  "sources": {
+    "wp-vagrant": {
+      "locked_version": "0.0.3"
+    },
+    "chef_throttle": {
+      "path": "./chef_throttle"
+    },
+    "wp-rbenv": {
+      "locked_version": "0.1.2"
+    },
+    "wprelease": {
+      "locked_version": "1.6.2"
+    },
+    "openssh": {
+      "locked_version": "0.8.1"
+    },
+    "users": {
+      "locked_version": "0.6.1"
+    },
+    "nscd": {
+      "locked_version": "0.7.0"
+    },
+    "wp_java": {
+      "locked_version": "1.0.1"
+    },
+    "apt": {
+      "locked_version": "0.9.33"
+    },
+    "whitepages": {
+      "locked_version": "1.5.0"
+    },
+    "rbenv": {
+      "locked_version": "0.7.3"
+    },
+    "ruby_build": {
+      "locked_version": "0.7.2"
+    },
+    "java": {
+      "locked_version": "1.12.1"
+    },
+    "windows": {
+      "locked_version": "1.4.0"
+    },
+    "chef_handler": {
+      "locked_version": "1.0.1"
+    },
+    "log_collection": {
+      "locked_version": "0.1.10"
+    }
+  }
+}
