@@ -55,29 +55,29 @@ module ChefThrottle
   end
 
   class EventHandler < Chef::EventDispatch::Base
-    attr_accessor :node
+    attr_reader :node
 
     include ExhibitorDiscovery
 
     # Called before convergence starts
     def converge_start(run_context)
-      node = run_context.node
+      @node = run_context.node
 
       if enabled?
-        log.info "Waiting on Cluster lock..."
+        log.info{ "Waiting on Cluster lock..." }
         shared_latch.wait(run_on_failed_latch?)
-        log.info "Got Cluster lock..."
+        log.info{ "Got Cluster lock..." }
       else 
-        log.info "Chef throttle not enabled."
+        log.info{ "Chef throttle not enabled." }
       end
     end
 
     # Called when the converge phase is finished.
     def converge_complete
       if enabled?
-        log.info "Releasing Cluster lock..."
+        log.info{ "Releasing Cluster lock..." }
         shared_latch.complete
-        log.info "Released Cluster lock..."
+        log.info{ "Released Cluster lock..." }
       end
     end
 
