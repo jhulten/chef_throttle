@@ -18,25 +18,27 @@ module ChefThrottle
   end
 
   module ExhibitorDiscovery
+    module Error ; end
+
     # From https://github.com/SimpleFinance/chef-zookeeper/blob/master/libraries/exhibitor_discovery.rb
     # Licensed under Apache 2
     require 'net/http'
     require 'uri'
 
-    class ExhibitorError < StandardError
+    def discover_zookeepers(exhibitor_host)
+      url = URI.join(exhibitor_host, '/exhibitor/v1/cluster/list')
+      discover_zookeepers_from_url(url)
     end
 
-
-    def discover_zookeepers(exhibitor_host)
+    def discover_zookeepers_from_url(url)
       require 'json'
-      url = URI.join(exhibitor_host, '/exhibitor/v1/cluster/list')
-      begin
-        http = Net::HTTP.new(url.host, url.port)
-        http.read_timeout = http.open_timeout = 3
-        JSON.parse(http.get(url.path).body)
-      rescue StandardError => reason
-        raise ExhibitorError, reason
-      end
+
+      http = Net::HTTP.new(url.host, url.port)
+      http.read_timeout = http.open_timeout = 3
+      JSON.parse(http.get(url.path).body)
+    rescue Exception => e
+      e.extend( Error )
+      raise
     end
 
     def zk_connect_str(zookeepers, chroot = nil)
@@ -47,11 +49,9 @@ module ChefThrottle
       # host1:port,...,hostN:port[/<chroot>]
 
       zk_connect = zookeepers["servers"].collect { |server| "#{server}:#{zookeepers['port']}" }.join ","
-      if not chroot.nil?
-        zk_connect += "/#{chroot}"
-      end
-      zk_connect
+      chroot.nil? ? zk_connect : "#{zk_connect}/#{chroot}"
     end
+
   end
 
   class EventHandler < Chef::EventDispatch::Base
@@ -101,8 +101,8 @@ module ChefThrottle
 
     def server
       node[:chef_throttle][:server] || zk_connect_str(discover_zookeepers(node[:chef_throttle][:exhibitor] || "" ))
-    rescue ExhibitorError => e
-      log.warn { "Could not discover ZK connect string from Exhibitor: #{e.reason}" }
+    rescue ExhibitorDiscovery => e
+      log.warn { "Could not discover ZK connect string from Exhibitor: #{e.message}" }
       log.warn { "Define either node[:chef_throttle][:server] (for static config) or node[:chef_throttle][:exhibitor] (for exhibitor discovery)" }
       if run_on_failed_latch?
         log.warn { "Continuing WITHOUT throttle..." }
@@ -119,13 +119,14 @@ module ChefThrottle
   end
 
   class ZookeeperLatch
-    attr_reader :server, :cluster_name, :limit, :lock_data
+    attr_reader :server, :cluster_name, :limit, :lock_data, :latch
 
     def initialize(server, cluster_name, limit, lock_data)
       @server = server
       @cluster_name = cluster_name
       @lock_data = lock_data
       @limit = limit
+      @latch = Queue.new
     end
 
     def wait(run_on_fail = false)
@@ -189,10 +190,6 @@ module ChefThrottle
       "/chef_throttle/clusters/#{@cluster_name}/queue"
     end
 
-    def latch
-      @queue ||= Queue.new
-    end
-
     def release
       latch << 1
     end
@@ -206,5 +203,4 @@ module ChefThrottle
     end
   end
 end
-
 
