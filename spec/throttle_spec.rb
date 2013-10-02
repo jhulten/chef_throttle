@@ -35,12 +35,22 @@ module ChefThrottle
 
     let(:server) { 'zk' }
     let(:cluster_name) { 'service' }
+    let(:cluster_path) { '/my_env/clusters' }
+    let(:lock_path) { '/queue' }
     let(:limit) { 20 }
     let(:name) { 'localhost' }
-    let(:throttle_config) {{server: server, cluster_name: cluster_name, limit: limit, enable: true}}
+    let(:throttle_config) {
+      { server: server,
+        cluster_name: cluster_name,
+        cluster_path: cluster_path,
+        limit: limit,
+        lock_path: lock_path,
+        enable: true}}
     let(:node) { double('node', name: name, :attribute? => true, :[] => throttle_config) }
     let(:context) { double('context', node: node) }
     let(:exhibit_string) { 'somehost:9999' }
+    let(:chroot) { File.join( cluster_path, cluster_name) }
+    let(:zk_connect_string) { "#{server}:2181#{chroot}" }
 
     before do
       allow(ZookeeperLatch).to receive(:new).and_return(zk, nil) # Landmine if called more than once
@@ -49,7 +59,6 @@ module ChefThrottle
       throttle_config[:run_on_failure] = true if md[:rof]
       throttle_config[:exhibitor] = exhibit_string if md[:exhibitor]
 
-      expect(node).to receive(:attribute?).with(:chef_throttle).exactly(1).times
       expect(node).to receive(:[]).with(:chef_throttle).at_least(:once) unless example.metadata[:no_throttle]
       expect(Log).to receive(:new).with(EventHandler).exactly(1).times
     end
@@ -77,9 +86,9 @@ module ChefThrottle
         end
       end
 
-      context "when throttle is configed" do
+      context "when throttle is configured" do
         it "sets up the latch" do
-          expect(ZookeeperLatch).to receive(:new).with(server, cluster_name, limit, name)
+          expect(ZookeeperLatch).to receive(:new).with(zk_connect_string, lock_path, limit, name)
           subject.converge_start(context)
         end
 
@@ -107,7 +116,7 @@ module ChefThrottle
           end
 
           it "passes in the default values" do
-            expect(ZookeeperLatch).to receive(:new).with(zk_connect, 'default_cluster', 1, name)
+            expect(ZookeeperLatch).to receive(:new).with(zk_connect, lock_path, 1, name)
             subject.converge_start(context)
           end
 

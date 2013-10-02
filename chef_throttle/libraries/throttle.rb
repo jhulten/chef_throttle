@@ -48,7 +48,7 @@ module ChefThrottle
       # returns a zk connect string as used by kafka, and others
       # host1:port,...,hostN:port[/<chroot>]
 
-      zk_connect = zookeepers["servers"].collect { |server| "#{server}:#{zookeepers['port']}" }.join ","
+      zk_connect = zookeepers["servers"].collect { |svr| "#{svr}:#{zookeepers['port']}" }.join ","
       chroot.nil? ? zk_connect : "#{zk_connect}/#{chroot}"
     end
 
@@ -92,15 +92,31 @@ module ChefThrottle
 
     def shared_latch
       @shared_latch ||= begin
-        cluster_name = node[:chef_throttle][:cluster_name] || "default_cluster"
         limit        = node[:chef_throttle][:limit] || 1
         host         = node.name
-        ZookeeperLatch.new(server, cluster_name, limit, host)
+        lock_path    = node[:chef_throttle][:lock_path] || "/queue"
+        ZookeeperLatch.new(server, lock_path, limit, host)
       end
     end
 
+    def chroot
+      @chroot ||= "#{node[:chef_throttle][:cluster_path]}/#{node[:chef_throttle][:cluster_name]}".gsub(/^\//, "") 
+    end
+    
+    def has_server?
+      @has_server ||= (node.attribute?(:chef_throttle) &&
+                       node[:chef_throttle].has_key?(:server)) &&
+        ! node[:chef_throttle][:server].nil?
+    end
+    
     def server
-      node[:chef_throttle][:server] || zk_connect_str(discover_zookeepers(node[:chef_throttle][:exhibitor] || "" ))
+      if has_server?
+        connect_data = {"servers" => [ node[:chef_throttle][:server] ], "port" => 2181}
+        puts "XXX> #{connect_data}"
+        zk_connect_str(connect_data, chroot)
+      else
+        zk_connect_str(discover_zookeepers(node[:chef_throttle][:exhibitor] || "" ), chroot)
+      end
     rescue ExhibitorDiscovery => e
       log.warn { "Could not discover ZK connect string from Exhibitor: #{e.message}" }
       log.warn { "Define either node[:chef_throttle][:server] (for static config) or node[:chef_throttle][:exhibitor] (for exhibitor discovery)" }
@@ -119,11 +135,11 @@ module ChefThrottle
   end
 
   class ZookeeperLatch
-    attr_reader :server, :cluster_name, :limit, :lock_data, :latch
+    attr_reader :server, :lock_path, :limit, :lock_data, :latch
 
-    def initialize(server, cluster_name, limit, lock_data)
+    def initialize(server, lock_path, limit, lock_data)
       @server = server
-      @cluster_name = cluster_name
+      @lock_path = lock_path
       @lock_data = lock_data
       @limit = limit
       @latch = Queue.new
@@ -187,7 +203,7 @@ module ChefThrottle
     end
 
     def zk_path
-      "/chef_throttle/clusters/#{@cluster_name}/queue"
+      @lock_path
     end
 
     def release
