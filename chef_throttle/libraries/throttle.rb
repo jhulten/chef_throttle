@@ -135,7 +135,8 @@ module ChefThrottle
   end
 
   class ZookeeperLatch
-    attr_reader :server, :lock_path, :limit, :lock_data, :latch
+    attr_reader :server, :cluster_name, :limit, :lock_data
+    private attr_reader :latch
 
     def initialize(server, lock_path, limit, lock_data)
       @server = server
@@ -172,6 +173,7 @@ module ChefThrottle
     end
 
     def fetch_children
+      watching = false
       children = zk.children(zk_path).sort
       my_index = children.index(node_id)
       log.info {"In position #{my_index}"}
@@ -180,8 +182,13 @@ module ChefThrottle
         release
       else
         log.info {"Waiting ..."}
+        watching = true
         children[my_index - limit, limit].each { |x| watch_child(x) }
       end
+    rescue ZK::Exceptions::NoNode
+      raise unless watching
+      log.info { "Child missing. Retrying fetch children." }
+      retry
     end
 
     def watch_child(child)
@@ -191,7 +198,11 @@ module ChefThrottle
         log.info {"saw change #{event} for #{child}"}
         fetch_children
       end
-      zk.get(child_path, :watch => true)
+      begin
+        zk.get(child_path, :watch => true)
+      rescue
+        log.info {"node for #{child_path} disappeared."}
+      end
     end
 
     def zk_node

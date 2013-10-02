@@ -292,7 +292,47 @@ module ChefThrottle
   end
 
   describe ZookeeperLatch do
-   it "does some things" 
+    let(:subject) { ZookeeperLatch.new(server, cluster_name, limit, lock_data) }
+    let(:server) { }
+    let(:cluster_name) { 'my_cluster' }
+    let(:limit) { 2 }
+    let(:lock_data) { }
+
+    let(:q) { double("queue", pop: nil, :<< => nil) }
+
+    let(:client) { double("zk client", get: nil, mkdir_p: nil, create: node) }
+    let(:event) { double("event", to_str: 'event') }
+    let(:node) { "server/some_path/#{node_id}" }
+    let(:node_id) { 'me' }
+
+    let(:path) { '/some/path/to/queue' }
+
+    let(:target) { double('target', debug: nil, info: nil, warn: nil, error: nil, fatal: nil) }
+    let(:logger) { TargetLog.new(target) }
+
+    before do
+      allow(Log).to receive(:new).and_return(logger)
+    end
+
+    describe "wait" do
+
+      context "no connection problems" do
+        
+        before do
+          allow(client).to receive(:on_state_change)
+          allow(client).to receive(:zk_path).and_return(path)
+
+
+        it "creates the reservation accumulator" do
+          expect(client).to receive(:mkdir_p).with(path)
+          subject.wait
+        end
+
+        it "makes the reservation" do
+          expect(client).to receive(:create).with("#{path}/lock-", @lock_data.to_str, sequential: true, ephemeral: true)
+        
+      end
+
   end
 
 
