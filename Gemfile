@@ -9,6 +9,5 @@ gem 'guard-rspec'
 gem 'guard-bundler'
 gem 'guard-shell'
 gem 'rb-inotify', '~> 0.8.8'
-
-
-
+gem 'zk'
+gem 'winrm', path: '../../os/WinRM'

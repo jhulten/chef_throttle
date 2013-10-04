@@ -100,19 +100,17 @@ module ChefThrottle
     end
 
     def chroot
-      @chroot ||= "#{node[:chef_throttle][:cluster_path]}/#{node[:chef_throttle][:cluster_name]}".gsub(/^\//, "") 
+      @chroot ||= "#{node[:chef_throttle][:cluster_path]}/#{node[:chef_throttle][:cluster_name]}".gsub(/^\//, "")
     end
     
     def has_server?
-      @has_server ||= (node.attribute?(:chef_throttle) &&
-                       node[:chef_throttle].has_key?(:server)) &&
-        ! node[:chef_throttle][:server].nil?
+      @has_server ||= (node.attribute?(:chef_throttle) && node[:chef_throttle].has_key?(:server)) &&
+          !!node[:chef_throttle][:server]
     end
     
     def server
       if has_server?
         connect_data = {"servers" => [ node[:chef_throttle][:server] ], "port" => 2181}
-        puts "XXX> #{connect_data}"
         zk_connect_str(connect_data, chroot)
       else
         zk_connect_str(discover_zookeepers(node[:chef_throttle][:exhibitor] || "" ), chroot)
@@ -135,8 +133,10 @@ module ChefThrottle
   end
 
   class ZookeeperLatch
-    attr_reader :server, :cluster_name, :limit, :lock_data
-    private attr_reader :latch
+    class ConnectionProblem < StandardError ; end
+
+    attr_reader :server, :cluster_name, :limit, :lock_data, :latch
+    private :latch
 
     def initialize(server, lock_path, limit, lock_data)
       @server = server
@@ -152,7 +152,7 @@ module ChefThrottle
           log.warn { "Zookeeper connection failed and :run_on_failure set to true. Continuing..." }
           release
         else
-          raise RuntimeError.new("Zookeeper connection failed and :run_on_failure set to false.")
+          raise ConnectionProblem, "Zookeeper connection failed and :run_on_failure set to false."
         end
       end
       zk.mkdir_p(zk_path)
@@ -174,8 +174,8 @@ module ChefThrottle
 
     def fetch_children
       watching = false
-      children = zk.children(zk_path).sort
-      my_index = children.index(node_id)
+      children = zk.children(zk_path).select{|child| child < zk_node_id}.sort
+      my_index = children.length
       log.info {"In position #{my_index}"}
       if my_index < @limit
         log.info {"My turn!"}
@@ -183,7 +183,7 @@ module ChefThrottle
       else
         log.info {"Waiting ..."}
         watching = true
-        children[my_index - limit, limit].each { |x| watch_child(x) }
+        children.last(limit).each { |x| watch_child(x) }
       end
     rescue ZK::Exceptions::NoNode
       raise unless watching

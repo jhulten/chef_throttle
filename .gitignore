@@ -2,3 +2,7 @@ vendor/bundle
 .bundle/
 tmp/
 cookbooks/
+.*.sqp
+*~
+log
+.bin
