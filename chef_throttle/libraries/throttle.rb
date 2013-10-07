@@ -102,12 +102,12 @@ module ChefThrottle
     def chroot
       @chroot ||= "#{node[:chef_throttle][:cluster_path]}/#{node[:chef_throttle][:cluster_name]}".gsub(/^\//, "")
     end
-    
+
     def has_server?
       @has_server ||= (node.attribute?(:chef_throttle) && node[:chef_throttle].has_key?(:server)) &&
           !!node[:chef_throttle][:server]
     end
-    
+
     def server
       if has_server?
         connect_data = {"servers" => [ node[:chef_throttle][:server] ], "port" => 2181}
@@ -202,6 +202,7 @@ module ChefThrottle
         zk.get(child_path, :watch => true)
       rescue
         log.info {"node for #{child_path} disappeared."}
+        raise
       end
     end
 
@@ -230,4 +231,3 @@ module ChefThrottle
     end
   end
 end
-

@@ -303,7 +303,7 @@ module ChefThrottle
 
     let(:client) { double("zk client", mkdir_p: nil, delete: nil) }
     let(:event) { double("event") }
-    let(:node) { "server/some_path/#{node_id}" }
+    let(:zk_node) { "server/some_path/#{node_id}" }
     let(:node_id) { 5 }
 
     let(:path) { '/some/path/to/queue' }
@@ -316,7 +316,7 @@ module ChefThrottle
       allow(Log).to receive(:new).and_return(logger, nil)
       allow(Queue).to receive(:new).and_return(q)
 
-      allow(client).to receive(:create).and_return(node, nil)
+      allow(client).to receive(:create).and_return(zk_node, nil)
     end
 
     describe "wait" do
@@ -361,7 +361,7 @@ module ChefThrottle
         let(:wait_args) { [] }
 
         include_context "wait main body"
-        
+
         before do
           allow(client).to receive(:on_state_change)
         end
@@ -402,7 +402,7 @@ module ChefThrottle
       end
 
       it "deletes the node from the client" do
-        expect(client).to receive(:delete).with(node)
+        expect(client).to receive(:delete).with(zk_node)
         subject.complete
       end
     end
@@ -484,10 +484,10 @@ module ChefThrottle
       before do
         allow(subject).to receive(:fetch_children).and_return
       end
-      
+
       shared_context "watch_child core assertions" do
         let(:sense){ ex ? :to : :to_not }
-        
+
         it "logs the watch" do
           expect(target).to receive(:info).with("watching #{child}")
           expect{subject.send(:watch_child, child)}.send(sense, raise_error(*(ex ? [ex] : [])))
@@ -513,6 +513,7 @@ module ChefThrottle
       class GetBoom < StandardError ; end
 
       shared_context "watch_child with zk_get raising" do
+        let(:ex) { GetBoom }
         before do
           allow(client).to receive(:get).and_raise GetBoom
           expect(target).to receive(:info).with("node for #{child_path} disappeared.")
@@ -596,21 +597,81 @@ module ChefThrottle
 
   describe "ChefThrottle self-integration" do
 
+    let(:target) { double('target', debug: nil, info: nil, warn: nil, error: nil, fatal: nil) }
+    let(:logger) { TargetLog.new(target) }
+    let(:server) { 'zk' }
+    let(:cluster_name) { 'service' }
+    let(:cluster_path) { '/my_env/clusters' }
+    let(:lock_path) { '/queue' }
+    let(:limit) { 20 }
+    let(:name) { 'localhost' }
+    let(:throttle_config) {
+      { server: server,
+        cluster_name: cluster_name,
+        cluster_path: cluster_path,
+        limit: limit,
+        lock_path: lock_path,
+        enable: true}}
+    let(:node) { double('node', name: name, :attribute? => true, :[] => throttle_config) }
+    let(:context) { double('context', node: node) }
     let(:handler) { EventHandler.new }
     let(:connection) { double('connection', get: get_result, :read_timeout= => 3, :open_timeout= => 3) }
     let(:get_result) { double('get_result', body: zkdata.to_json) }
     let(:zkdata) { {'servers' => ['this_host', 'that.host', 'the.other.host'], 'port' => 13579} }
+    let(:client) { double("zk client", mkdir_p: nil, delete: nil) }
+    let(:q) { double("queue", pop: nil, :<< => nil) }
+    let(:zk_node) { "server/some_path/#{node_id}" }
+    let(:node_id) { 5 }
 
+    let(:children) { [ 9, 1, 6, 3, 2, 4, 8, 7, 5 ] }
+    let(:infront) { children.select{|c| c < node_id} }
+    let(:watchable) { infront.select{|c| c >= node_id - limit} }
+
+    let(:handler) { EventHandler.new }
     before do
       %w{debug info warn error fatal}.each do |lvl|
         allow(Chef::Log).to receive(lvl)
       end
 
       allow(Net::HTTP).to receive(:new).and_return(connection)
+      allow(ZK::Client).to receive(:new).and_return(client)
+      allow(client).to receive(:create).and_return(zk_node, nil)
+      allow(Queue).to receive(:new).and_return(q)
     end
 
-    it "does some things"
+    it "EventHandler#converge_start with none in front" do
+      allow(client).to receive(:on_state_change).and_return
+      allow(client).to receive(:children).and_return([])
+
+      expect(client).to receive(:children)
+      expect(q).to receive(:<<)
+      expect(q).to receive(:pop)
+      handler.converge_start(context)
+    end
+
+    it "EventHandler#converge_start with no zk server data and many in front" do
+      throttle_config.delete(:server)
+      throttle_config[:exhibitor] = 'http://myhost.mydomain'
+      allow(client).to receive(:on_state_change).and_return
+      allow(client).to receive(:children).and_return(children.map{|c| c.to_s}, [node_id.to_s])
+      watchable.each{|c| allow(client).to receive(:watch_child).with(c.to_s).and_return} if watchable.length >= limit
+
+      zk_hosts = zkdata['servers'].map{|s| "#{s}:#{zkdata['port']}" } * ','
+      zk_path = "#{cluster_path}/#{cluster_name}"
+
+      expect(ZK::Client).to receive(:new).with(zk_hosts + zk_path)
+      expect(q).to receive(:<<)
+      expect(q).to receive(:pop)
+      handler.converge_start(context)
+    end
+
+    it "EventHandler#converge_complete" do
+      allow(client).to receive(:on_state_change).and_return
+      allow(client).to receive(:children).and_return([])
+      handler.converge_start(context)
+
+      expect(client).to receive(:delete)
+      handler.converge_complete
+    end
   end
 end
-
-
