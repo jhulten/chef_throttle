@@ -513,9 +513,9 @@ module ChefThrottle
       class GetBoom < StandardError ; end
 
       shared_context "watch_child with zk_get raising" do
-        let(:ex) { GetBoom }
         before do
           allow(client).to receive(:get).and_raise GetBoom
+          expect(target).to receive(:info).with("node for #{child_path} disappeared.")
         end
       end
 
@@ -539,7 +539,7 @@ module ChefThrottle
 
       shared_context "zk.register yields" do
         before do
-          allow(client).to receive(:get).and_yield(event)
+          allow(client).to receive(:register).and_yield(event)
         end
 
         it "fetches the children" do
@@ -560,17 +560,17 @@ module ChefThrottle
         include_context "watch_child with zk_get okay"
       end
 
-      shared_context "zk.register does yield, zk.get is okay" do
+      context "zk.register does yield, zk.get is okay" do
         include_context "zk.register yields"
         include_context "watch_child with zk_get okay"
       end
 
-      shared_context "zk.register does not yield, zk.get bombs" do
+      context "zk.register does not yield, zk.get bombs" do
         include_context "zk.register does not yield"
         include_context "watch_child with zk_get raising"
       end
 
-      shared_context "zk.register does yield, zk.get bombs" do
+      context "zk.register does yield, zk.get bombs" do
         include_context "zk.register yields"
         include_context "watch_child with zk_get raising"
       end
