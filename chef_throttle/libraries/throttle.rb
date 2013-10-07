@@ -115,7 +115,7 @@ module ChefThrottle
       else
         zk_connect_str(discover_zookeepers(node[:chef_throttle][:exhibitor] || "" ), chroot)
       end
-    rescue ExhibitorDiscovery => e
+    rescue ExhibitorDiscovery::Error => e
       log.warn { "Could not discover ZK connect string from Exhibitor: #{e.message}" }
       log.warn { "Define either node[:chef_throttle][:server] (for static config) or node[:chef_throttle][:exhibitor] (for exhibitor discovery)" }
       if run_on_failed_latch?
