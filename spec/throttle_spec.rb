@@ -211,7 +211,7 @@ module ChefThrottle
 
     let(:zks) { {'servers' => ['host1', 'host2', 'hostN'], 'port' => 8675} }
 
-    describe "discover_zookeepers" do
+    describe "#discover_zookeepers" do
       attr_reader :exc
 
       let(:zkhost) { '127.0.0.1:1234' }
@@ -299,16 +299,21 @@ module ChefThrottle
       end
     end
 
-    describe "zk_connect_str" do
+    describe "#zk_connect_str" do
       let(:zks){ {'servers' => ['host1', 'host2', 'hostN'], 'port' => 8675} }
       let(:base_string){ 'host1:8675,host2:8675,hostN:8675' }
       let(:root){ 'this/base/url' }
-      it "distributes the port across the servers, joining with commas" do
-        expect(subject.zk_connect_str(zks)).to eq(base_string)
+
+      context "without a supplied root" do
+        it "distributes the port across the servers, joining with commas" do
+          expect(subject.zk_connect_str(zks)).to eq(base_string)
+        end
       end
 
-      it "appends a supplied root" do
-        expect(subject.zk_connect_str(zks, root)).to eq("#{base_string}/#{root}")
+      context "with a supplied root" do
+        it "appends the root" do
+          expect(subject.zk_connect_str(zks, root)).to eq("#{base_string}/#{root}")
+        end
       end
     end
   end
@@ -340,7 +345,7 @@ module ChefThrottle
       allow(client).to receive(:create).and_return(zk_node, nil)
     end
 
-    describe "wait" do
+    describe "#wait" do
 
       shared_context "wait main body" do
         before do
@@ -416,7 +421,7 @@ module ChefThrottle
       end
     end
 
-    describe "complete" do
+    describe "#complete" do
       it "caches the client and node" do
         expect{subject.complete}.to_not raise_error
         expect{subject.complete}.to_not raise_error
@@ -428,7 +433,7 @@ module ChefThrottle
       end
     end
 
-    describe "fetch children" do
+    describe "#fetch_children (private)" do
       let(:children) { [ 9, 1, 6, 3, 2, 4, 8, 7, 5 ].select{|c| c > (md[:time] || 0)} }
       let(:infront) { children.select{|c| c < node_id} }
       let(:watchable) { infront.select{|c| c != md[:boom] and c >= node_id - limit} }
@@ -497,7 +502,7 @@ module ChefThrottle
       end
     end
 
-    describe "watch_child" do
+    describe "#watch_child (private)" do
       let(:child) { 'child_resource' }
       let(:child_path) { "#{path}/#{child}" }
       let(:ex) { nil }
@@ -611,7 +616,6 @@ module ChefThrottle
 
         include_context "watch_child core assertions"
       end
-
     end
   end
 
