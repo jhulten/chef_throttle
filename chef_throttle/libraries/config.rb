@@ -1,4 +1,4 @@
-require "./throttle.rb"
+require_relative "./throttle.rb"
 
 begin
   require 'zk'
