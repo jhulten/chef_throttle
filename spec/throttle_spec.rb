@@ -57,31 +57,36 @@ module ChefThrottle
       allow(ZookeeperLatch).to receive(:new).and_return(zk, nil) # Landmine if called more than once
       allow(Log).to receive(:new).and_return logger
       md = example.metadata
-      throttle_config[:run_on_failure] = true if md[:rof]
       throttle_config[:exhibitor] = exhibit_string if md[:exhibitor]
 
       expect(node).to receive(:[]).with(:chef_throttle).at_least(:once) unless md[:no_throttle]
       expect(Log).to receive(:new).with(EventHandler).exactly(1).times
     end
 
-    describe "converge_start" do
-      context "when throttle not enabled" do
+    shared_context "run_on_failure" do
+      before do
+        throttle_config[:run_on_failure] = true
+      end
+    end
+
+    describe "#converge_start" do
+      context "when throttle is not enabled" do
         before do
           throttle_config[:enable] = false
         end
 
-        it "logs not enabled" do
+        it "logs the message 'not enabled'" do
           expect(target).to receive(:info).with("Chef throttle not enabled.")
           subject.converge_start(context)
         end
       end
 
-      context "when throttle config info not present", :no_throttle => true do
+      context "when throttle config info is not present", :no_throttle => true do
         before do
           allow(node).to receive(:attribute?).and_return(false)
         end
 
-        it "logs not enabled" do
+        it "logs the message 'not enabled'" do
           expect(target).to receive(:info).with("Chef throttle not enabled.")
           subject.converge_start(context)
         end
@@ -101,13 +106,17 @@ module ChefThrottle
           subject.converge_start(context)
         end
 
-        it "passes true in the wait call if run_on_failure is true", rof: true do
-          expect(zk).to receive(:wait).with(true)
-          subject.converge_start(context)
+        context "when run_on_failure is true" do
+          include_context "run_on_failure"
+          
+          it "passes true in the wait call" do
+            expect(zk).to receive(:wait).with(true)
+            subject.converge_start(context)
+          end
         end
 
         context "without detailed config" do
-          let(:throttle_config) {{enable: true}}
+          let(:throttle_config) { {enable: true} }
           let(:zkdt) { double('zookeeper data') }
           let(:zk_connect) { 'zookeeper.local.domain' }
 
@@ -121,20 +130,24 @@ module ChefThrottle
             subject.converge_start(context)
           end
 
-          it "does the zookeeper discovery with an empty string if there is no :exhibitor attribute" do
-            expect(subject).to receive(:discover_zookeepers).with('')
-            subject.converge_start(context)
+          context "when there is no :exhibitor attribute" do
+            it "does the zookeeper discovery with an empty string" do
+              expect(subject).to receive(:discover_zookeepers).with('')
+              subject.converge_start(context)
+            end
           end
 
-          it "passes zookeeper discovery the :exhibitor attribute if present", exhibitor: true do
-            expect(subject).to receive(:discover_zookeepers).with(exhibit_string)
-            subject.converge_start(context)
+          context "when the :exhibitor attribute is present" do
+            it "passes zookeeper discovery the :exhibitor attribute", exhibitor: true do
+              expect(subject).to receive(:discover_zookeepers).with(exhibit_string)
+              subject.converge_start(context)
+            end
           end
         end
       end
     end
 
-    describe "converge_complete" do
+    describe "#converge_complete" do
       before do
         subject.converge_start(context)
 
@@ -153,30 +166,38 @@ module ChefThrottle
       end
     end
 
-    describe "server (private) when discover_zookeepers bombs" do
-      let(:message) { 'fail message' }
+    describe "#server (private)" do
+      context "when discover_zookeepers bombs" do
+        let(:message) { 'fail message' }
 
-      class TestError < Exception
-        include ExhibitorDiscovery
-      end
+        class TestError < Exception
+          include ExhibitorDiscovery::Error
+        end
 
-      before do
-        throttle_config.delete(:server) # Have to get to discover_zookeeper first...
-        allow(subject).to receive(:discover_zookeepers).and_raise(TestError, message)
-      end
+        before do
+          throttle_config.delete(:server) # Have to get to discover_zookeeper first...
+          allow(subject).to receive(:discover_zookeepers).and_raise(TestError, message)
+        end
 
-      it "logs a bunch of stuff and re-raises" do
-        expect(target).to receive(:warn).with("Could not discover ZK connect string from Exhibitor: #{message}").ordered
-        expect(target).to receive(:warn).with('Define either node[:chef_throttle][:server] (for static config) or node[:chef_throttle][:exhibitor] (for exhibitor discovery)').ordered
-        expect(target).to receive(:fatal).with('CANCELLING RUN: Throttle mechanism not available.').ordered
-        expect{subject.converge_start(context)}.to raise_error(TestError, message)
-      end
+        context "run_on_failure is not set" do
+          it "logs a bunch of stuff and re-raises" do
+            expect(target).to receive(:warn).with("Could not discover ZK connect string from Exhibitor: #{message}").ordered
+            expect(target).to receive(:warn).with('Define either node[:chef_throttle][:server] (for static config) or node[:chef_throttle][:exhibitor] (for exhibitor discovery)').ordered
+            expect(target).to receive(:fatal).with('CANCELLING RUN: Throttle mechanism not available.').ordered
+            expect{subject.converge_start(context)}.to raise_error(TestError, message)
+          end
+        end
 
-      it "merely warns (and proceeds) if run_on_failure is set", rof: true do
-        expect(target).to receive(:warn).with("Could not discover ZK connect string from Exhibitor: #{message}").ordered
-        expect(target).to receive(:warn).with('Define either node[:chef_throttle][:server] (for static config) or node[:chef_throttle][:exhibitor] (for exhibitor discovery)').ordered
-        expect(target).to receive(:warn).with('Continuing WITHOUT throttle...').ordered
-        subject.converge_start(context)
+        context "run_on_failure is set" do
+          include_context "run_on_failure"
+          
+          it "merely warns (and proceeds)" do
+            expect(target).to receive(:warn).with("Could not discover ZK connect string from Exhibitor: #{message}").ordered
+            expect(target).to receive(:warn).with('Define either node[:chef_throttle][:server] (for static config) or node[:chef_throttle][:exhibitor] (for exhibitor discovery)').ordered
+            expect(target).to receive(:warn).with('Continuing WITHOUT throttle...').ordered
+            subject.converge_start(context)
+          end
+        end
       end
     end
   end
@@ -190,7 +211,7 @@ module ChefThrottle
 
     let(:zks) { {'servers' => ['host1', 'host2', 'hostN'], 'port' => 8675} }
 
-    describe "discover_zookeepers" do
+    describe "#discover_zookeepers" do
       attr_reader :exc
 
       let(:zkhost) { '127.0.0.1:1234' }
@@ -278,16 +299,21 @@ module ChefThrottle
       end
     end
 
-    describe "zk_connect_str" do
+    describe "#zk_connect_str" do
       let(:zks){ {'servers' => ['host1', 'host2', 'hostN'], 'port' => 8675} }
       let(:base_string){ 'host1:8675,host2:8675,hostN:8675' }
       let(:root){ 'this/base/url' }
-      it "distributes the port across the servers, joining with commas" do
-        expect(subject.zk_connect_str(zks)).to eq(base_string)
+
+      context "without a supplied root" do
+        it "distributes the port across the servers, joining with commas" do
+          expect(subject.zk_connect_str(zks)).to eq(base_string)
+        end
       end
 
-      it "appends a supplied root" do
-        expect(subject.zk_connect_str(zks, root)).to eq("#{base_string}/#{root}")
+      context "with a supplied root" do
+        it "appends the root" do
+          expect(subject.zk_connect_str(zks, root)).to eq("#{base_string}/#{root}")
+        end
       end
     end
   end
@@ -319,7 +345,7 @@ module ChefThrottle
       allow(client).to receive(:create).and_return(zk_node, nil)
     end
 
-    describe "wait" do
+    describe "#wait" do
 
       shared_context "wait main body" do
         before do
@@ -395,7 +421,7 @@ module ChefThrottle
       end
     end
 
-    describe "complete" do
+    describe "#complete" do
       it "caches the client and node" do
         expect{subject.complete}.to_not raise_error
         expect{subject.complete}.to_not raise_error
@@ -407,7 +433,7 @@ module ChefThrottle
       end
     end
 
-    describe "fetch children" do
+    describe "#fetch_children (private)" do
       let(:children) { [ 9, 1, 6, 3, 2, 4, 8, 7, 5 ].select{|c| c > (md[:time] || 0)} }
       let(:infront) { children.select{|c| c < node_id} }
       let(:watchable) { infront.select{|c| c != md[:boom] and c >= node_id - limit} }
@@ -476,7 +502,7 @@ module ChefThrottle
       end
     end
 
-    describe "watch_child" do
+    describe "#watch_child (private)" do
       let(:child) { 'child_resource' }
       let(:child_path) { "#{path}/#{child}" }
       let(:ex) { nil }
@@ -590,7 +616,6 @@ module ChefThrottle
 
         include_context "watch_child core assertions"
       end
-
     end
   end
 
