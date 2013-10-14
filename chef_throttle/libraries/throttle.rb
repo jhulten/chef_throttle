@@ -17,113 +17,81 @@ module ChefThrottle
     end
   end
 
-  module ExhibitorDiscovery
-    module Error ; end
-
-    # From https://github.com/SimpleFinance/chef-zookeeper/blob/master/libraries/exhibitor_discovery.rb
-    # Licensed under Apache 2
-    require 'net/http'
-    require 'uri'
-
-    def discover_zookeepers(exhibitor_host)
-      url = URI.join(exhibitor_host, '/exhibitor/v1/cluster/list')
-      discover_zookeepers_from_url(url)
-    end
-
-    def discover_zookeepers_from_url(url)
-      require 'json'
-
-      http = Net::HTTP.new(url.host, url.port)
-      http.read_timeout = http.open_timeout = 3
-      JSON.parse(http.get(url.path).body)
-    rescue Exception => e
-      e.extend( Error )
-      raise
-    end
-
-    def zk_connect_str(zookeepers, chroot = nil)
-      # zookeepers: as returned from discover_zookeepers
-      # chroot: optional chroot
-      #
-      # returns a zk connect string as used by kafka, and others
-      # host1:port,...,hostN:port[/<chroot>]
-
-      zk_connect = zookeepers["servers"].collect { |svr| "#{svr}:#{zookeepers['port']}" }.join ","
-      chroot.nil? ? zk_connect : "#{zk_connect}/#{chroot}"
-    end
-
-  end
-
   class EventHandler < Chef::EventDispatch::Base
-    attr_reader :node
-
-    include ExhibitorDiscovery
+    attr_accessor :shared_latch
+    # attr_accessor :lb_reservation
 
     # Called before convergence starts
     def converge_start(run_context)
-      @node = run_context.node
+      self.shared_latch = SharedLatch.new(run_context.node)
+      shared_latch.lock_if_enabled
 
+      # run_context.include_recipe 'chef_throttle::default'
+      # lb_reservation = LBReservation.new(connection_file, Chef::Log)
+      # lb_reservation.reserve_node
+    end
+
+    # Called when the converge phase is finished.
+    def converge_complete
+      # lb_reservation.release_node
+      shared_latch.unlock_if_enabled
+    end
+  end
+
+  class SharedLatch
+    attr_accessor :chef_node
+
+    def initialize(chef_node)
+      self.chef_node = chef_node
+      @latch = nil
+    end
+
+    def latch
+      @latch ||= ZookeeperLatch.new(chef_node[:chef_throttle][:config_string], lock_path, limit, host)
+    end
+
+    def lock_path
+      chef_node[:chef_throttle][:lock_path] || "/queue"
+    end
+
+    def limit
+      chef_node[:chef_throttle][:limit] || 1
+    end
+
+    def host
+      chef_node[:name]
+    end
+
+    def lock_if_enabled
       if enabled?
         log.info{ "Waiting on Cluster lock..." }
-        shared_latch.wait(run_on_failed_latch?)
+        latch.wait(run_on_failed_latch?)
         log.info{ "Got Cluster lock..." }
       else
         log.info{ "Chef throttle not enabled." }
       end
     end
 
-    # Called when the converge phase is finished.
-    def converge_complete
+    def unlock_if_enabled
       if enabled?
         log.info{ "Releasing Cluster lock..." }
-        shared_latch.complete
+        latch.complete
         log.info{ "Released Cluster lock..." }
       end
     end
 
+    def zk_throttle_cluster_path
+      [ chef_node[:chef_throttle][:cluster_path], chef_node[:chef_throttle][:cluster_name] ].join('/')
+    end
+
     private
     def enabled?
-      @enabled ||= (node.attribute?(:chef_throttle) && node[:chef_throttle][:enable] == true)
+      chef_node[:chef_throttle][:enable]
     end
 
     def run_on_failed_latch?
-      @run_on_failed_latch ||= node[:chef_throttle][:run_on_failure] == true
-    end
-
-    def shared_latch
-      @shared_latch ||= begin
-        limit        = node[:chef_throttle][:limit] || 1
-        host         = node.name
-        lock_path    = node[:chef_throttle][:lock_path] || "/queue"
-        ZookeeperLatch.new(server, lock_path, limit, host)
-      end
-    end
-
-    def chroot
-      @chroot ||= "#{node[:chef_throttle][:cluster_path]}/#{node[:chef_throttle][:cluster_name]}".gsub(/^\//, "")
-    end
-
-    def has_server?
-      @has_server ||= (node.attribute?(:chef_throttle) && node[:chef_throttle].has_key?(:server)) &&
-          !!node[:chef_throttle][:server]
-    end
-
-    def server
-      if has_server?
-        connect_data = {"servers" => [ node[:chef_throttle][:server] ], "port" => 2181}
-        zk_connect_str(connect_data, chroot)
-      else
-        zk_connect_str(discover_zookeepers(node[:chef_throttle][:exhibitor] || "" ), chroot)
-      end
-    rescue ExhibitorDiscovery::Error => e
-      log.warn { "Could not discover ZK connect string from Exhibitor: #{e.message}" }
-      log.warn { "Define either node[:chef_throttle][:server] (for static config) or node[:chef_throttle][:exhibitor] (for exhibitor discovery)" }
-      if run_on_failed_latch?
-        log.warn { "Continuing WITHOUT throttle..." }
-      else
-        log.fatal { "CANCELLING RUN: Throttle mechanism not available." }
-        raise e
-      end
+      # FIXME refactor test to look for falsey value instead of False
+      ! chef_node[:chef_throttle][:run_on_failure].nil? && chef_node[:chef_throttle][:run_on_failure]
     end
 
     def log
@@ -149,10 +117,10 @@ module ChefThrottle
     def wait(run_on_fail = false)
       zk.on_state_change do |event|
         if run_on_fail
-          log.warn { "Zookeeper connection failed and :run_on_failure set to true. Continuing..." }
+          log.warn { "Zookeeper connection failed; continuing without throttle..." }
           release
         else
-          raise ConnectionProblem, "Zookeeper connection failed and :run_on_failure set to false."
+          raise ConnectionProblem, "Zookeeper connection failed"
         end
       end
       zk.mkdir_p(zk_path)
@@ -207,7 +175,7 @@ module ChefThrottle
     end
 
     def zk_node
-      @node ||= zk.create("#{zk_path}/lock-", "#{@lock_data}", :sequential => true, :ephemeral => true)
+      @zk_node ||= zk.create("#{zk_path}/lock-", "#{@lock_data}", :sequential => true, :ephemeral => true)
     end
 
     def zk_node_id

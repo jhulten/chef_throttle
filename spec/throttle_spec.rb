@@ -33,34 +33,38 @@ module ChefThrottle
     let(:target) { double('target', debug: nil, info: nil, warn: nil, error: nil, fatal: nil) }
     let(:logger) { TargetLog.new(target) }
     let(:zk)     { double('zookeeper', wait: nil, complete: nil) }
+    let(:exhibitor) { 'zk' }
+    let(:zkdata) { {'servers' => ['this_host', 'that.host', 'the.other.host'], 'port' => 13579} }
+    let(:zk_hosts) { zkdata['servers'].map{|s| "#{s}:#{zkdata['port']}" }.join(',') }
 
-    let(:server) { 'zk' }
     let(:cluster_name) { 'service' }
     let(:cluster_path) { '/my_env/clusters' }
+    let(:chroot) { File.join( cluster_path, cluster_name) }
     let(:lock_path) { '/queue' }
     let(:limit) { 20 }
     let(:name) { 'localhost' }
     let(:throttle_config) {
-      { server: server,
+      {
+        config_string: "#{zk_hosts}:2181#{chroot}",
         cluster_name: cluster_name,
         cluster_path: cluster_path,
         limit: limit,
         lock_path: lock_path,
-        enable: true}}
-    let(:node) { double('node', name: name, :attribute? => true, :[] => throttle_config) }
+        enable: true,
+        name: name,
+      }
+    }
+    let(:node) { double('node', :name => name, :attribute? => true, :[] => throttle_config) }
     let(:context) { double('context', node: node) }
-    let(:exhibit_string) { 'somehost:9999' }
-    let(:chroot) { File.join( cluster_path, cluster_name) }
-    let(:zk_connect_string) { "#{server}:2181#{chroot}" }
 
     before do
       allow(ZookeeperLatch).to receive(:new).and_return(zk, nil) # Landmine if called more than once
       allow(Log).to receive(:new).and_return logger
       md = example.metadata
-      throttle_config[:exhibitor] = exhibit_string if md[:exhibitor]
 
+      allow(node).to receive(:[]).with(:name) { name }
       expect(node).to receive(:[]).with(:chef_throttle).at_least(:once) unless md[:no_throttle]
-      expect(Log).to receive(:new).with(EventHandler).exactly(1).times
+      expect(Log).to receive(:new).with(SharedLatch).exactly(1).times
     end
 
     shared_context "run_on_failure" do
@@ -83,7 +87,7 @@ module ChefThrottle
 
       context "when throttle config info is not present", :no_throttle => true do
         before do
-          allow(node).to receive(:attribute?).and_return(false)
+          throttle_config[:enable] = false
         end
 
         it "logs the message 'not enabled'" do
@@ -94,7 +98,7 @@ module ChefThrottle
 
       context "when throttle is configured" do
         it "sets up the latch" do
-          expect(ZookeeperLatch).to receive(:new).with(zk_connect_string, lock_path, limit, name)
+          expect(ZookeeperLatch).to receive(:new).with(throttle_config[:config_string], lock_path, limit, name)
           subject.converge_start(context)
         end
 
@@ -108,40 +112,10 @@ module ChefThrottle
 
         context "when run_on_failure is true" do
           include_context "run_on_failure"
-          
+
           it "passes true in the wait call" do
             expect(zk).to receive(:wait).with(true)
             subject.converge_start(context)
-          end
-        end
-
-        context "without detailed config" do
-          let(:throttle_config) { {enable: true} }
-          let(:zkdt) { double('zookeeper data') }
-          let(:zk_connect) { 'zookeeper.local.domain' }
-
-          before do
-            allow(subject).to receive(:discover_zookeepers).and_return(zkdt)
-            expect(subject).to receive(:zk_connect_str).with(zkdt, '').and_return(zk_connect)
-          end
-
-          it "passes in the default values" do
-            expect(ZookeeperLatch).to receive(:new).with(zk_connect, lock_path, 1, name)
-            subject.converge_start(context)
-          end
-
-          context "when there is no :exhibitor attribute" do
-            it "does the zookeeper discovery with an empty string" do
-              expect(subject).to receive(:discover_zookeepers).with('')
-              subject.converge_start(context)
-            end
-          end
-
-          context "when the :exhibitor attribute is present" do
-            it "passes zookeeper discovery the :exhibitor attribute", exhibitor: true do
-              expect(subject).to receive(:discover_zookeepers).with(exhibit_string)
-              subject.converge_start(context)
-            end
           end
         end
       end
@@ -166,156 +140,6 @@ module ChefThrottle
       end
     end
 
-    describe "#server (private)" do
-      context "when discover_zookeepers bombs" do
-        let(:message) { 'fail message' }
-
-        class TestError < Exception
-          include ExhibitorDiscovery::Error
-        end
-
-        before do
-          throttle_config.delete(:server) # Have to get to discover_zookeeper first...
-          allow(subject).to receive(:discover_zookeepers).and_raise(TestError, message)
-        end
-
-        context "run_on_failure is not set" do
-          it "logs a bunch of stuff and re-raises" do
-            expect(target).to receive(:warn).with("Could not discover ZK connect string from Exhibitor: #{message}").ordered
-            expect(target).to receive(:warn).with('Define either node[:chef_throttle][:server] (for static config) or node[:chef_throttle][:exhibitor] (for exhibitor discovery)').ordered
-            expect(target).to receive(:fatal).with('CANCELLING RUN: Throttle mechanism not available.').ordered
-            expect{subject.converge_start(context)}.to raise_error(TestError, message)
-          end
-        end
-
-        context "run_on_failure is set" do
-          include_context "run_on_failure"
-          
-          it "merely warns (and proceeds)" do
-            expect(target).to receive(:warn).with("Could not discover ZK connect string from Exhibitor: #{message}").ordered
-            expect(target).to receive(:warn).with('Define either node[:chef_throttle][:server] (for static config) or node[:chef_throttle][:exhibitor] (for exhibitor discovery)').ordered
-            expect(target).to receive(:warn).with('Continuing WITHOUT throttle...').ordered
-            subject.converge_start(context)
-          end
-        end
-      end
-    end
-  end
-
-  describe ExhibitorDiscovery do
-    let(:subject) do
-      s = Object.new
-      s.extend ExhibitorDiscovery
-      s
-    end
-
-    let(:zks) { {'servers' => ['host1', 'host2', 'hostN'], 'port' => 8675} }
-
-    describe "#discover_zookeepers" do
-      attr_reader :exc
-
-      let(:zkhost) { '127.0.0.1:1234' }
-      let(:host) { 'localhost' }
-      let(:port) { 80 }
-      let(:path) { '/my/path' }
-      let(:body) { '{"json"=>"string"}' }
-      let(:url) { double(:url, host: host, port: port, path: path) }
-      let(:http) { double(:http, get: result, :read_timeout= => nil, :open_timeout= => nil) }
-      let(:result) { double(:result, body: body) }
-
-      before do
-        [
-          [JSON, :parse, zks, :json],
-          [http, :get, result, :get],
-          [Net::HTTP, :new, http, :http],
-          [URI, :join, url, :uri],
-        ].each do |object, method, result, key|
-          if (ex = example.metadata[key])
-            @exc = ex
-            allow(object).to receive(method).and_raise(exc, exc.name)
-          else
-            allow(object).to receive(method).and_return(result)
-          end
-        end
-      end
-
-      context "happy path" do
-        it "creates a url" do
-          expect(URI).to receive(:join).with(zkhost, '/exhibitor/v1/cluster/list')
-          subject.discover_zookeepers(zkhost)
-        end
-
-        it "creates an http connection" do
-          expect(Net::HTTP).to receive(:new).with(host, port)
-          subject.discover_zookeepers(zkhost)
-        end
-
-        it "sets the http timeouts" do
-          expect(http).to receive(:read_timeout=).with(3)
-          expect(http).to receive(:open_timeout=).with(3)
-          subject.discover_zookeepers(zkhost)
-        end
-
-        it "gets the data from the zkhost" do
-          expect(http).to receive(:get).with(path)
-          subject.discover_zookeepers(zkhost)
-        end
-
-        it "passes the body of the response to JSON.parse" do
-          expect(JSON).to receive(:parse).with(body)
-          subject.discover_zookeepers(zkhost)
-        end
-
-        it "returns the results of the JSON.parse" do
-          expect(subject.discover_zookeepers(zkhost)).to eq(zks)
-        end
-      end
-
-      context "exceptions are tagged and released" do
-        def expect_exception
-          expect{subject.discover_zookeepers(zkhost)}.to raise_error { |e|
-            expect(e).to be_instance_of(exc)
-            expect(e.message).to eq(exc.name)
-            expectation = example.metadata[:notagging] ? :to_not : :to
-            expect(e).send(expectation, be_kind_of(ExhibitorDiscovery::Error))
-          }
-        end
-
-        it "on URI.join", uri: ArgumentError, notagging: true do
-          expect_exception
-        end
-
-        it "on Net::HTTP.new", http: ArgumentError do
-          expect_exception
-        end
-
-        it "on http.get", get: Timeout::Error do
-          expect_exception
-        end
-
-        it "on JSON.parse", get: ParseError do
-          expect_exception
-        end
-      end
-    end
-
-    describe "#zk_connect_str" do
-      let(:zks){ {'servers' => ['host1', 'host2', 'hostN'], 'port' => 8675} }
-      let(:base_string){ 'host1:8675,host2:8675,hostN:8675' }
-      let(:root){ 'this/base/url' }
-
-      context "without a supplied root" do
-        it "distributes the port across the servers, joining with commas" do
-          expect(subject.zk_connect_str(zks)).to eq(base_string)
-        end
-      end
-
-      context "with a supplied root" do
-        it "appends the root" do
-          expect(subject.zk_connect_str(zks, root)).to eq("#{base_string}/#{root}")
-        end
-      end
-    end
   end
 
   describe ZookeeperLatch do
@@ -624,25 +448,31 @@ module ChefThrottle
 
     let(:target) { double('target', debug: nil, info: nil, warn: nil, error: nil, fatal: nil) }
     let(:logger) { TargetLog.new(target) }
-    let(:server) { 'zk' }
-    let(:cluster_name) { 'service' }
+    let(:exhibitor) { 'zk' }
+    let(:zkdata) { {'servers' => ['this_host', 'that.host', 'the.other.host'], 'port' => 13579} }
+    let(:zk_hosts) { zkdata['servers'].map{|s| "#{s}:#{zkdata['port']}" }.join(',') }
     let(:cluster_path) { '/my_env/clusters' }
+    let(:cluster_name) { 'service' }
+    let(:zk_path) { "#{cluster_path}/#{cluster_name}" }
     let(:lock_path) { '/queue' }
     let(:limit) { 20 }
     let(:name) { 'localhost' }
     let(:throttle_config) {
-      { server: server,
+      {
+        config_string: zk_hosts + zk_path,
         cluster_name: cluster_name,
         cluster_path: cluster_path,
         limit: limit,
         lock_path: lock_path,
-        enable: true}}
-    let(:node) { double('node', name: name, :attribute? => true, :[] => throttle_config) }
+        enable: true,
+        name: name,
+      }
+    }
+    let(:node) { double('node', :name => name, :attribute? => true, :[] => throttle_config) }
     let(:context) { double('context', node: node) }
     let(:handler) { EventHandler.new }
     let(:connection) { double('connection', get: get_result, :read_timeout= => 3, :open_timeout= => 3) }
     let(:get_result) { double('get_result', body: zkdata.to_json) }
-    let(:zkdata) { {'servers' => ['this_host', 'that.host', 'the.other.host'], 'port' => 13579} }
     let(:client) { double("zk client", mkdir_p: nil, delete: nil) }
     let(:q) { double("queue", pop: nil, :<< => nil) }
     let(:zk_node) { "server/some_path/#{node_id}" }
@@ -675,16 +505,12 @@ module ChefThrottle
     end
 
     it "EventHandler#converge_start with no zk server data and many in front" do
-      throttle_config.delete(:server)
-      throttle_config[:exhibitor] = 'http://myhost.mydomain'
       allow(client).to receive(:on_state_change).and_return
       allow(client).to receive(:children).and_return(children.map{|c| c.to_s}, [node_id.to_s])
       watchable.each{|c| allow(client).to receive(:watch_child).with(c.to_s).and_return} if watchable.length >= limit
 
-      zk_hosts = zkdata['servers'].map{|s| "#{s}:#{zkdata['port']}" } * ','
-      zk_path = "#{cluster_path}/#{cluster_name}"
 
-      expect(ZK::Client).to receive(:new).with(zk_hosts + zk_path)
+      expect(ZK::Client).to receive(:new).with(throttle_config[:config_string])
       expect(q).to receive(:<<)
       expect(q).to receive(:pop)
       handler.converge_start(context)
