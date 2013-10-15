@@ -2,8 +2,8 @@
   chef_zero_port = '8889'
 
     Vagrant.configure("2") do |config|
-    config.ssh.max_tries = 40
-    config.ssh.timeout   = 120
+    # config.ssh.max_tries = 40
+    # config.ssh.timeout   = 120
 
     config.vm.provider :virtualbox do |vb|
       vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]

@@ -6,3 +6,5 @@ cookbooks/
 *~
 log
 .bin
+.vagrant-chef-zero
+.vagrant
