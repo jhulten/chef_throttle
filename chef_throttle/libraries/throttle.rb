@@ -80,7 +80,7 @@ module ChefThrottle
       end
     end
 
-    def zk_throttle_cluster_path
+    def cluster_path
       [ chef_node[:chef_throttle][:cluster_path], chef_node[:chef_throttle][:cluster_name] ].join('/')
     end
 
