@@ -162,7 +162,7 @@ module ChefThrottle
     let(:logger) { TargetLog.new(target) }
 
     before do
-      allow(::ZK::Client).to receive(:new).and_return(client, nil)
+      allow(::ZK).to receive(:new).and_return(client, nil)
       allow(Log).to receive(:new).and_return(logger, nil)
       allow(Queue).to receive(:new).and_return(q)
 
@@ -489,7 +489,7 @@ module ChefThrottle
       end
 
       allow(Net::HTTP).to receive(:new).and_return(connection)
-      allow(ZK::Client).to receive(:new).and_return(client)
+      allow(ZK).to receive(:new).and_return(client)
       allow(client).to receive(:create).and_return(zk_node, nil)
       allow(Queue).to receive(:new).and_return(q)
     end
@@ -510,7 +510,7 @@ module ChefThrottle
       watchable.each{|c| allow(client).to receive(:watch_child).with(c.to_s).and_return} if watchable.length >= limit
 
 
-      expect(ZK::Client).to receive(:new).with(throttle_config[:config_string])
+      expect(ZK).to receive(:new).with(throttle_config[:config_string])
       expect(q).to receive(:<<)
       expect(q).to receive(:pop)
       handler.converge_start(context)

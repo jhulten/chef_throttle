@@ -123,6 +123,7 @@ module ChefThrottle
           raise ConnectionProblem, "Zookeeper connection failed"
         end
       end
+      log.info { "Creating Zookeeper node #{zk_path}" }
       zk.mkdir_p(zk_path)
       zk_node
       log.info {"created node #{zk_node_id}"}
@@ -137,7 +138,7 @@ module ChefThrottle
     private
 
     def zk
-      @zk ||= ::ZK::Client.new(@server)
+      @zk ||= ::ZK.new(@server)
     end
 
     def fetch_children
@@ -175,7 +176,13 @@ module ChefThrottle
     end
 
     def zk_node
-      @zk_node ||= zk.create("#{zk_path}/lock-", "#{@lock_data}", :sequential => true, :ephemeral => true)
+      @zk_node ||= zk_create
+    end
+
+    def zk_create
+      prefix = "#{zk_path}/lock-"
+      log.info { "Creating sequential, ephemeral Zookeeper node with prefix #{prefix}" }
+      zk.create(prefix, @lock_data, :sequential => true, :ephemeral => true)
     end
 
     def zk_node_id
