@@ -80,7 +80,7 @@ module ChefThrottle
         end
 
         it "logs the message 'not enabled'" do
-          expect(target).to receive(:info).with("Chef throttle not enabled.")
+          expect(target).to receive(:info).with("Chef throttle not enabled; proceeding")
           subject.converge_start(context)
         end
       end
@@ -91,7 +91,7 @@ module ChefThrottle
         end
 
         it "logs the message 'not enabled'" do
-          expect(target).to receive(:info).with("Chef throttle not enabled.")
+          expect(target).to receive(:info).with("Chef throttle not enabled; proceeding")
           subject.converge_start(context)
         end
       end
@@ -103,9 +103,9 @@ module ChefThrottle
         end
 
         it "waits on the latch (and logs it)" do
-          expect(target).to receive(:info).with('Waiting on Cluster lock...').ordered
+          expect(target).to receive(:info).with("Waiting for chef_throttle lock at #{throttle_config[:config_string]}").ordered
           expect(zk).to receive(:wait).with(false).ordered
-          expect(target).to receive(:info).with('Got Cluster lock...').ordered
+          expect(target).to receive(:info).with("Received chef_throttle lock; proceeding").ordered
 
           subject.converge_start(context)
         end
@@ -132,9 +132,9 @@ module ChefThrottle
       end
 
       it "sends complete to the latch (and logs it)" do
-        expect(target).to receive(:info).with('Releasing Cluster lock...')#.ordered
+        expect(target).to receive(:info).with('Releasing chef_throttle lock')#.ordered
         expect(zk).to receive(:complete)#.ordered
-        expect(target).to receive(:info).with('Released Cluster lock...')#.ordered
+        expect(target).to receive(:info).with('Released chef_throttle lock')#.ordered
 
         subject.converge_complete
       end

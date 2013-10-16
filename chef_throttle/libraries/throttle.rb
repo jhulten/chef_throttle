@@ -64,19 +64,19 @@ module ChefThrottle
 
     def lock_if_enabled
       if enabled?
-        log.info{ "Waiting on Cluster lock..." }
+        log.info{ "Waiting for chef_throttle lock at #{chef_node[:chef_throttle][:config_string]}" }
         latch.wait(run_on_failed_latch?)
-        log.info{ "Got Cluster lock..." }
+        log.info{ "Received chef_throttle lock; proceeding" }
       else
-        log.info{ "Chef throttle not enabled." }
+        log.info{ "Chef throttle not enabled; proceeding" }
       end
     end
 
     def unlock_if_enabled
       if enabled?
-        log.info{ "Releasing Cluster lock..." }
+        log.info{ "Releasing chef_throttle lock" }
         latch.complete
-        log.info{ "Released Cluster lock..." }
+        log.info{ "Released chef_throttle lock" }
       end
     end
 
