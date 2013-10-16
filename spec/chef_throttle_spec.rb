@@ -5,8 +5,6 @@ describe 'chef_throttle::default' do
   include_context :chef_spec_helper
 
   it do
-    # Chefspec does not wire up event handlers for direct examination, so we
-    # must extract the list of handlers and inspect it directly.
-    expect(event_handler_classes(chef_run)).to include(ChefThrottle::EventHandler)
+    expect(chef_run).to install_chef_gem 'zk'
   end
 end

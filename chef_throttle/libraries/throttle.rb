@@ -19,21 +19,13 @@ module ChefThrottle
 
   class EventHandler < Chef::EventDispatch::Base
     attr_accessor :shared_latch
-    # attr_accessor :lb_reservation
 
-    # Called before convergence starts
     def converge_start(run_context)
       self.shared_latch = SharedLatch.new(run_context.node)
       shared_latch.lock_if_enabled
-
-      # run_context.include_recipe 'chef_throttle::default'
-      # lb_reservation = LBReservation.new(connection_file, Chef::Log)
-      # lb_reservation.reserve_node
     end
 
-    # Called when the converge phase is finished.
     def converge_complete
-      # lb_reservation.release_node
       shared_latch.unlock_if_enabled
     end
   end
@@ -86,7 +78,32 @@ module ChefThrottle
 
     private
     def enabled?
-      chef_node[:chef_throttle][:enable]
+      if @enabled.nil?
+        @enabled = chef_node[:chef_throttle][:enable] && zk_available?
+        log_enabled_message
+      end
+      @enabled
+    end
+
+    def log_enabled_message
+      if @enabled
+        log.info { "chef_throttle enabled" }
+      else
+        log.warn { "chef_throttle disabled" }
+      end
+    end
+
+    def zk_available?
+      if @zk_available.nil?
+        begin
+          require 'zk'
+          @zk_available = true
+        rescue LoadError
+          log.warn "'zk' gem not available"
+          @zk_available = false
+        end
+      end
+      @zk_available
     end
 
     def run_on_failed_latch?
