@@ -42,7 +42,7 @@ module ChefThrottle
     let(:chroot) { File.join( cluster_path, cluster_name) }
     let(:lock_path) { '/queue' }
     let(:limit) { 20 }
-    let(:name) { 'localhost' }
+    let(:fqdn) { 'localhost' }
     let(:throttle_config) {
       {
         config_string: "#{zk_hosts}:2181#{chroot}",
@@ -51,10 +51,10 @@ module ChefThrottle
         limit: limit,
         lock_path: lock_path,
         enable: true,
-        name: name,
+        fqdn: fqdn,
       }
     }
-    let(:node) { double('node', :name => name, :attribute? => true, :[] => throttle_config) }
+    let(:node) { double('node', :fqdn => fqdn, :attribute? => true, :[] => throttle_config) }
     let(:context) { double('context', node: node) }
 
     before do
@@ -62,7 +62,7 @@ module ChefThrottle
       allow(Log).to receive(:new).and_return logger
       md = example.metadata
 
-      allow(node).to receive(:[]).with(:name) { name }
+      allow(node).to receive(:[]).with(:fqdn) { fqdn }
       expect(node).to receive(:[]).with(:chef_throttle).at_least(:once) unless md[:no_throttle]
       expect(Log).to receive(:new).with(SharedLatch).exactly(1).times
     end
@@ -98,7 +98,7 @@ module ChefThrottle
 
       context "when throttle is configured" do
         it "sets up the latch" do
-          expect(ZookeeperLatch).to receive(:new).with(throttle_config[:config_string], lock_path, limit, name)
+          expect(ZookeeperLatch).to receive(:new).with(throttle_config[:config_string], lock_path, limit, fqdn)
           subject.converge_start(context)
         end
 
@@ -456,7 +456,7 @@ module ChefThrottle
     let(:zk_path) { "#{cluster_path}/#{cluster_name}" }
     let(:lock_path) { '/queue' }
     let(:limit) { 20 }
-    let(:name) { 'localhost' }
+    let(:fqdn) { 'localhost' }
     let(:throttle_config) {
       {
         config_string: zk_hosts + zk_path,
@@ -465,10 +465,10 @@ module ChefThrottle
         limit: limit,
         lock_path: lock_path,
         enable: true,
-        name: name,
+        fqdn: fqdn,
       }
     }
-    let(:node) { double('node', :name => name, :attribute? => true, :[] => throttle_config) }
+    let(:node) { double('node', :fqdn => fqdn, :attribute? => true, :[] => throttle_config) }
     let(:context) { double('context', node: node) }
     let(:handler) { EventHandler.new }
     let(:connection) { double('connection', get: get_result, :read_timeout= => 3, :open_timeout= => 3) }
