@@ -51,7 +51,7 @@ module ChefThrottle
     end
 
     def host
-      chef_node[:name]
+      chef_node[:fqdn]
     end
 
     def lock_if_enabled
