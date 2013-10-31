@@ -1,0 +1,153 @@
+# Put files/directories that should be ignored in this file when uploading
+# or sharing to the community site.
+# Lines that start with '# ' are comments.
+
+# Ridley uses a DIFFERENT interpretation of this file, particularly for .files.
+# This requires quite a few more lines to get right...
+
+# OS generated files #
+######################
+.DS_Store
+Icon?
+nohup.out
+ehthumbs.db
+Thumbs.db
+
+# SASS #
+########
+.sass-cache
+
+# EDITORS #
+###########
+\#*
+.#*
+*~
+.*~
+./*~
+./.*~
+*.sw[a-z]
+.*.sw[a-z]
+./*.sw[a-z]
+./.*.sw[a-z]
+*.bak
+.*.bak
+./*.bak
+./.*.bak
+REVISION
+TAGS*
+tmtags
+*_flymake.*
+*_flymake
+*.tmproj
+.project
+.settings
+mkmf.log
+
+## COMPILED ##
+##############
+a.out
+*.o
+*.pyc
+*.so
+*.com
+*.class
+*.dll
+*.exe
+*/rdoc/
+
+# Testing #
+###########
+.watchr
+.rspec
+spec/*
+./spec/*
+spec/fixtures/*
+test/*
+./test/*
+features/*
+Guardfile
+Procfile
+coverage/*
+tmp/*
+./tmp/*
+
+chef_throttle/*
+./chef_throttle/*
+
+# SCM #
+#######
+.git
+*/.git/*
+.gitignore
+*/.gitignore
+.gitmodules
+.gitconfig
+.gitattributes
+.svn
+*/.bzr/*
+*/.hg/*
+*/.svn/*
+
+# merge fails
+*.rej
+*.orig
+*.BACKUP.*
+*.BASE.*
+*.REMOTE.*
+
+# Bundler / rbenv #
+###################
+.bin
+.bundle
+.ruby-version
+Gemfile
+Gemfile.lock
+vendor/*
+./vendor/*
+
+# Berkshelf #
+#############
+Berksfile
+Berksfile.lock
+cookbooks/*
+./cookbooks/*
+tmp/*
+./tmp/*
+
+# Community #
+#############
+CONTRIBUTING
+CHANGELOG*
+ChangeLog*
+Changelog*
+
+# DO NOT ADD READMEs!  metadata.rb might use them for long description!
+
+# Strainer #
+############
+Colanderfile
+Strainerfile
+.colander
+.strainer
+
+# Vagrant #
+###########
+.vagrant
+./.vagrant/*
+Vagrantfile
+.vagrant-chef-zero/*
+./.vagrant-chef-zero/*
+chef.json
+chef_solo.rb
+chefignore
+
+# Thor #
+########
+Thorfile
+
+# Travis #
+##########
+.travis.yml
+
+# Local Files #
+###############

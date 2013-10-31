@@ -1,6 +1,6 @@
 require_relative 'spec_helper'
 require 'zk'
-require_relative File.join(*%w{.. chef_throttle libraries throttle})
+require_relative File.join(*%w{.. libraries throttle})
 
 module ChefThrottle
   describe Log do

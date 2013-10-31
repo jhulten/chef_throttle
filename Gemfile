@@ -3,7 +3,7 @@ source 'http://rubygems.util.pages'
 
 gem 'debugger', :platform => :ruby_19
 
-gem 'wp-cookbook', '~> 0.11'
+gem 'wp-cookbook', '~> 0.16', '>= 0.16.1'
 
 gem 'guard-rspec'
 gem 'guard-bundler'

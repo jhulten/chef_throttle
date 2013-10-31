@@ -1,5 +1,5 @@
 
-require_relative File.join( %w[.. chef_throttle libraries throttle] )
+require_relative File.join( %w[.. libraries throttle] )
 
 describe 'chef_throttle::default' do
   include_context :chef_spec_helper

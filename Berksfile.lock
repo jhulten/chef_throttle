@@ -1,13 +1,13 @@
 {
   "sources": {
     "wp-vagrant": {
-      "locked_version": "0.0.5"
+      "locked_version": "0.0.10"
     },
     "chef_throttle": {
-      "path": "./chef_throttle"
+      "path": "."
     },
     "wp-rbenv": {
-      "locked_version": "1.0.1"
+      "locked_version": "1.1.1"
     },
     "rbenv": {
       "locked_version": "0.7.3"
@@ -24,14 +24,23 @@
     "chef_handler": {
       "locked_version": "1.0.1"
     },
+    "users": {
+      "locked_version": "0.7.2"
+    },
+    "nscd": {
+      "locked_version": "0.7.0"
+    },
     "apt": {
-      "locked_version": "0.10.0"
+      "locked_version": "0.10.1"
     },
     "log_collection": {
       "locked_version": "0.1.10"
     },
     "ubuntu": {
-      "locked_version": "0.14.0"
+      "locked_version": "0.15.5"
+    },
+    "wp_apt": {
+      "locked_version": "0.3.0"
     },
     "openssh": {
       "locked_version": "0.8.1"
@@ -39,20 +48,23 @@
     "rubygems": {
       "locked_version": "0.3.3"
     },
-    "users": {
-      "locked_version": "0.7.2"
-    },
-    "nscd": {
-      "locked_version": "0.7.0"
-    },
     "wp_java": {
-      "locked_version": "0.93.1"
+      "locked_version": "1.0.1"
     },
     "rsyslog": {
       "locked_version": "0.9.3"
     },
     "cron": {
       "locked_version": "1.2.4"
+    },
+    "wprelease": {
+      "locked_version": "1.7.3"
+    },
+    "whitepages": {
+      "locked_version": "1.6.0"
+    },
+    "wp_ruby": {
+      "locked_version": "1.2.2"
     }
   }
 }

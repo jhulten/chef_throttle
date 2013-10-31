@@ -1,43 +1,48 @@
-  chef_zero_ip = '33.33.33.10'
-  chef_zero_port = '8889'
+WP_VAGRANT_SERIAL_ID = 12
 
-    Vagrant.configure("2") do |config|
-    # config.ssh.max_tries = 40
-    # config.ssh.timeout   = 120
+def self.ip_address(offset)
+ ip_range_base = 0xac100000 + WP_VAGRANT_SERIAL_ID * 64 + offset
+ address_parts = [ip_range_base >> 24, ip_range_base >> 16 & 0xff, ip_range_base >> 8 & 0xff, ip_range_base & 0xff]
+ address_parts * '.'
+end
 
-    config.vm.provider :virtualbox do |vb|
-      vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
-    end
+chef_zero_ip = ip_address(2)
+chef_zero_port = '8889'
 
-    config.vm.define :chefzero do |chefzero|
-      chefzero.vm.network :private_network, ip: chef_zero_ip
-      chefzero.vm.box = 'wp-chefzero'
-      chefzero.vm.box_url = 'http://fs0:8888/wp-chefzero.box'
+Vagrant.configure("2") do |config|
+  config.vm.provider :virtualbox do |vb|
+    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+  end
 
-      chefzero.vm.provision :chefzero do |cz|
-        cz.ip = chef_zero_ip
-        cz.port = chef_zero_port
-        cz.setup do |p|
-          p.import_data_bag_item(:users, :global)
-          p.import_berkshelf_cookbooks
-        end
-      end
-    end
+  config.vm.define :chefzero do |chefzero|
+    chefzero.vm.network :private_network, ip: chef_zero_ip
+    chefzero.vm.box = "wp-chefzero"
+    chefzero.vm.box_url = 'http://fs0:8888/wp-chefzero.box'
 
-    config.vm.define :target do |target|
-      target.vm.hostname = "stuff.dev.pages"
-      target.vm.network :private_network, ip: "33.33.33.20"
-      target.vm.box = 'wp-precise64'
-      target.vm.box_url = 'http://fs0:8888/wp-precise64.box'
-
-      target.vm.provision :chef_client do |chef|
-        chef.chef_server_url = "http://#{chef_zero_ip}:#{chef_zero_port}"
-        chef.validation_key_path = Vagrant::ChefzeroPlugin.pemfile
-        chef.add_recipe "wp-vagrant"
-
-        #The recipe we actually care about.
-        chef.add_recipe "chef_throttle::default"
+    chefzero.vm.provision :chefzero do |cz|
+      cz.ip = chef_zero_ip
+      cz.port = chef_zero_port
+      cz.setup do |p|
+        p.import_data_bag_item(:users, :global)
+        p.import_berkshelf_cookbooks
       end
     end
   end
+
+  config.vm.define :target do |target|
+    target.vm.hostname = "stuff.dev.pages"
+    target.vm.network :private_network, ip: ip_address(3)
+    target.vm.box = "wp-precise64"
+    target.vm.box_url = 'http://fs0:8888/wp-precise64.box'
+
+    target.vm.provision :chef_client do |chef|
+      chef.chef_server_url = "http://#{chef_zero_ip}:#{chef_zero_port}"
+      chef.validation_key_path = Vagrant::ChefzeroPlugin.pemfile
+      chef.add_recipe "wp-vagrant"
+
+      #The recipe we actually care about.
+      chef.add_recipe "chef_throttle::default"
+    end
+  end
+end
 
