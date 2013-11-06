@@ -1,7 +1,7 @@
 {
   "sources": {
     "wp-vagrant": {
-      "locked_version": "0.0.10"
+      "locked_version": "0.0.11"
     },
     "chef_throttle": {
       "path": "."
@@ -37,7 +37,7 @@
       "locked_version": "0.1.10"
     },
     "ubuntu": {
-      "locked_version": "0.15.5"
+      "locked_version": "0.15.18"
     },
     "wp_apt": {
       "locked_version": "0.3.0"
@@ -58,13 +58,13 @@
       "locked_version": "1.2.4"
     },
     "wprelease": {
-      "locked_version": "1.7.3"
+      "locked_version": "1.7.4"
     },
     "whitepages": {
-      "locked_version": "1.6.0"
+      "locked_version": "1.6.1"
     },
     "wp_ruby": {
-      "locked_version": "1.2.2"
+      "locked_version": "1.2.3"
     }
   }
 }

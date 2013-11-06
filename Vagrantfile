@@ -1,7 +1,7 @@
 WP_VAGRANT_SERIAL_ID = 12
 
 def self.ip_address(offset)
- ip_range_base = 0xac100000 + WP_VAGRANT_SERIAL_ID * 64 + offset
+ ip_range_base = 0x21212000 + WP_VAGRANT_SERIAL_ID * 8 + offset
  address_parts = [ip_range_base >> 24, ip_range_base >> 16 & 0xff, ip_range_base >> 8 & 0xff, ip_range_base & 0xff]
  address_parts * '.'
 end
