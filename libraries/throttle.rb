@@ -150,6 +150,7 @@ module ChefThrottle
 
     def complete
       zk.delete(zk_node)
+      zk.close!
     end
 
     private

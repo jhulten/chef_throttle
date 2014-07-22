@@ -247,12 +247,14 @@ module ChefThrottle
 
     describe "#complete" do
       it "caches the client and node" do
+        expect(client).to receive(:close!).twice
         expect{subject.complete}.to_not raise_error
         expect{subject.complete}.to_not raise_error
       end
 
       it "deletes the node from the client" do
         expect(client).to receive(:delete).with(zk_node)
+        expect(client).to receive(:close!)
         subject.complete
       end
     end
@@ -522,6 +524,7 @@ module ChefThrottle
       handler.converge_start(context)
 
       expect(client).to receive(:delete)
+      expect(client).to receive(:close!)
       handler.converge_complete
     end
   end
