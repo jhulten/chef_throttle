@@ -6,3 +6,6 @@ default[:chef_throttle][:limit] = 1
 default[:chef_throttle][:cluster_name] = "default_cluster"
 default[:chef_throttle][:cluster_path] = "chef_throttle/clusters"
 default[:chef_throttle][:lock_path] = "/queue"
+
+# This is needed to install the zookeeper gem
+default['build-essential']['compile_time'] = true

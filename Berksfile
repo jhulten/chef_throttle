@@ -1,4 +1,3 @@
-chef_api :config
+source 'https://supermarket.chef.io'
 
-cookbook 'wp-vagrant'
 metadata

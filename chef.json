@@ -1,4 +1,0 @@
-{
- "run_list": "chef_throttle::default"
-}
-
