@@ -1,3 +1,7 @@
+require 'wp-cookbook'
+
+Cookbook.name = 'chef_throttle'
+
 begin
   require "kitchen/thor_tasks"
   Kitchen::ThorTasks.new

@@ -1,3 +1,3 @@
-source 'https://supermarket.chef.io'
+chef_api :config
 
 metadata
