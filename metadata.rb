@@ -1,7 +1,8 @@
 name             'chef_throttle'
-maintainer       'WhitePages'
+maintainer       'Whitepages'
 license          'MIT'
 
 maintainer_email 'ait@whitepages.com'
-description      'WhitePages chef_throttle cookbook'
-version          '1.1.4'
+description      'Whitepages chef_throttle cookbook'
+version          '1.1.5'
+depends          'build-essential', '~> 2.1'

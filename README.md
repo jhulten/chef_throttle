@@ -1,8 +1,13 @@
-Description
-===========
+# Chef Throttle
 
-I look really foolish without some sort of description about what and how this
-cookbook works. I might want to hop over to
-https://raw.github.com/jtimberman/smartmontools-cookbook/master/README.md
-if I need ideas.
+Implements a chef throttle mechanism using zookeeper.
 
+## Testing with test-kitchen
+
+Run `bundle install`
+Run `kitchen verify default-<platform>`
+
+Platforms supported:
+
+* Ubuntu 12.04
+* Ubuntu 14.04
